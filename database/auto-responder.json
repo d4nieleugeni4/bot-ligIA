@@ -1,0 +1,34 @@
+[
+    {
+        "match": "oq é perfeiçao?",
+        "answer": "é o DN"
+    },
+    {
+        "match": "quem te criou?",
+        "answer": "o DN"
+    },
+    {
+        "match": "Qual seu nome",
+        "answer": "Meu nome é JARVIS"
+    },
+     {
+        "match": "Bom dia",
+        "answer": "Bom dia"
+    },
+     {
+        "match": "Boa tarde",
+        "answer": "boa tarde"
+    },
+     {
+        "match": "Boa noite",
+        "answer": "boa noite"
+    },
+     {
+        "match": "qual é a melho musica de 2025?",
+        "answer": ".play tipo itachi 2 mhrap"
+    },
+     {
+        "match": "qual é o melhor estilo musical?",
+        "answer": "Rap de anime é o melhor estilo musical"
+    }
+]
