@@ -38,7 +38,7 @@ module.exports = {
       const isMember = groupData.participants.some(p => p.id === userJid);
       
       if (isMember) {
-        await sendReply(`⚠️ O número ${cleanNumber} JÁ ESTÁ no grupo.`);
+        await sendReply(`⚠️ O número ${cleanNumber} *JÁ ESTÁ* no grupo.`);
         return;
       }
 
