@@ -1,5 +1,5 @@
 {
-  "name": "ligia",
+  "name": "jarvis",
   "version": "2.4.0",
   "description": "Um bot de WhatsApp top criado pelo dn.",
   "main": "./src/index.js",
