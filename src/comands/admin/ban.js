@@ -1,71 +1,99 @@
-const { PREFIX } = require(`${BASE_DIR}/config`);
-const { errorLog, successLog } = require(`${BASE_DIR}/utils/logger`);
+import config from "../config.js";
 
-module.exports = {
-  name: "ban",
-  description: "Bane um usuário do grupo",
-  commands: ["ban"],
-  usage: `${PREFIX}ban [@user | número | @user Xs]`,
-  handle: async ({ socket, webMessage, remoteJid, sendReply }) => {
-    try {
-      // Verifica se o usuário é admin
-      const isAdmin = await socket.groupMetadata(remoteJid)
-        .then(metadata => metadata.participants
-          .some(p => p.id === webMessage.key.participant && p.admin));
+export default {
+  nome: "ban",
 
-      if (!isAdmin) {
-        return await sendReply('⚠️ Você precisa ser admin para banir alguém!');
+  async executar(sock, msg) {
+    const remoteJid = msg.key.remoteJid;
+
+    // 1. Verifica se é grupo
+    if (!remoteJid.endsWith("@g.us")) return;
+
+    // Função vital para limpar o ID (evita bugs de comparação)
+    const getCleanJid = (jid) => {
+      if (!jid) return null;
+      return jid.split('@')[0].split(':')[0] + '@s.whatsapp.net';
+    };
+
+    const sender = getCleanJid(msg.key.participant || msg.key.remoteJid);
+
+    // 2. Verifica Admin (Lógica simplificada igual ao exemplo)
+    const metadata = await sock.groupMetadata(remoteJid);
+    const isAdmin = metadata.participants.some(p => 
+      getCleanJid(p.id) === sender && (p.admin === 'admin' || p.admin === 'superadmin')
+    );
+
+    if (!isAdmin) {
+      return await sock.sendMessage(remoteJid, { 
+        text: '⚠️ Você precisa ser admin para banir alguém!', 
+        quoted: msg 
+      });
+    }
+
+    // 3. Identificar o Alvo e Delay
+    let target = null;
+    let delay = 0;
+
+    const texto = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
+    const args = texto.split(' ').slice(1); // Remove o comando ".ban"
+
+    // A. Por Menção (@)
+    const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid;
+    if (mentioned && mentioned.length > 0) {
+      target = getCleanJid(mentioned[0]);
+    }
+    // B. Por Resposta (Reply)
+    else if (msg.message?.extendedTextMessage?.contextInfo?.participant) {
+      target = getCleanJid(msg.message.extendedTextMessage.contextInfo.participant);
+    }
+    // C. Por Número digitado (ex: .ban 551199999999)
+    else if (args[0] && args[0].match(/^\d+$/)) {
+      target = args[0] + "@s.whatsapp.net";
+    }
+
+    // 4. Verifica Delay (ex: 5s) - Igual ao seu exemplo
+    // Procura nos argumentos algo que termine com 's' (ex: 5s, 10s)
+    const delayArg = args.find(arg => arg.match(/^\d+s$/));
+    if (delayArg) {
+      delay = parseInt(delayArg.replace('s', '')) * 1000;
+    }
+
+    if (!target) {
+      return await sock.sendMessage(remoteJid, { 
+        text: '⚠️ Você precisa mencionar (@user), responder uma mensagem ou digitar o número!', 
+        quoted: msg 
+      });
+    }
+
+    // Proteção básica (para não banir o dono nem a si mesmo)
+    if (target === sender) return; 
+    if (target === getCleanJid(sock.user.id)) return;
+
+    // 5. Função de Banir
+    const executeBan = async () => {
+      try {
+        await sock.groupParticipantsUpdate(remoteJid, [target], "remove");
+        await sock.sendMessage(remoteJid, { 
+          text: `✅ Usuário banido com sucesso!` 
+        });
+      } catch (err) {
+        console.error(err);
+        await sock.sendMessage(remoteJid, { 
+          text: '❌ Erro ao banir (verifique se eu sou admin do grupo).', 
+          quoted: msg 
+        });
       }
+    };
 
-      let target = null;
-      let delay = 0;
-
-      // Extrai o texto do comando
-      const text = webMessage.message?.conversation || 
-                   webMessage.message?.extendedTextMessage?.text || "";
-      const args = text.split(' ').slice(1); // Ignora o comando .ban
-
-      // Verifica se há menção (@) ou número
-      if (webMessage.message?.extendedTextMessage?.contextInfo?.mentionedJid) {
-        target = webMessage.message.extendedTextMessage.contextInfo.mentionedJid[0];
-      } else if (args[0] && args[0].match(/^\d+/)) {
-        target = `${args[0]}@s.whatsapp.net`;
-      }
-
-      // Verifica se há delay (ex: 4s, 7s)
-      if (args.length > 1 && args[1].match(/^\d+s$/)) {
-        delay = parseInt(args[1]) * 1000; // Converte segundos para milissegundos
-      } else if (args[0] && args[0].match(/^\d+s$/)) {
-        delay = parseInt(args[0]) * 1000;
-      }
-
-      // Se não encontrou alvo
-      if (!target) {
-        return await sendReply('⚠️ Você precisa mencionar um usuário (@user) ou fornecer um número!');
-      }
-
-      // Função para executar o ban
-      const executeBan = async () => {
-        try {
-          await socket.groupParticipantsUpdate(remoteJid, [target], "remove");
-          await sendReply(`✅ Usuário ${target.split('@')[0]} banido com sucesso!`);
-        } catch (banError) {
-          errorLog(`Erro ao banir usuário: ${banError.message}`);
-          await sendReply('❌ Erro ao banir o usuário');
-        }
-      };
-
-      // Executa o ban com ou sem delay
-      if (delay > 0) {
-        await sendReply(`⏳ Banindo ${target.split('@')[0]} em ${delay/1000} segundos...`);
-        setTimeout(executeBan, delay);
-      } else {
-        await executeBan();
-      }
-
-    } catch (error) {
-      errorLog(`Erro no comando ban: ${error.message}`);
-      await sendReply('❌ Ocorreu um erro ao processar o comando de ban');
+    // 6. Executa com ou sem Delay
+    if (delay > 0) {
+      await sock.sendMessage(remoteJid, { 
+        text: `⏳ Banindo em ${delay/1000} segundos...`, 
+        quoted: msg 
+      });
+      setTimeout(executeBan, delay);
+    } else {
+      await executeBan();
     }
   }
 };
